@@ -175,6 +175,19 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].task_syscall_times
     }
+
+    fn current_task_map_range(&self, start: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current]
+            .memory_set
+            .checked_map(start, len, port)
+    }
+    fn current_task_unmap_range(&self, start: usize, len: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.checked_unmap(start, len)
+    }
 }
 
 /// Run the first task in task list.
@@ -235,3 +248,26 @@ pub fn get_current_task_st_time() -> usize {
 pub fn get_current_task_syscall_times() -> [u32; MAX_SYSCALL_NUM] {
     TASK_MANAGER.get_current_task_syscall_times()
 }
+
+/// map a vpn to allocated physical page
+pub fn current_task_map_range(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.current_task_map_range(start, len, port)
+}
+
+pub fn current_task_unmap_range(start: usize, len: usize) -> isize {
+    TASK_MANAGER.current_task_unmap_range(start, len)
+}
+// pub fn unmap_range(token: usize, vpn_range: VPNRange) -> isize {
+//     let mut page_table = PageTable::from_token(token);
+//     for vpn in vpn_range {
+//         if page_table.find_pte(vpn).is_none() {
+//             return -1;
+//         }
+//         let pte = page_table.find_pte_create(vpn).unwrap();
+//         if !pte.is_valid() {
+//             return -1;
+//         }
+//         *pte = PageTableEntry::empty();
+//     }
+//     0
+// }

@@ -47,6 +47,83 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.page_table.token()
     }
+    pub fn checked_map(&mut self, start: usize, len: usize, port: usize) -> isize {
+        let (start_va, end_va) = (VirtAddr::from(start), VirtAddr::from(start + len));
+        // check if start is valid
+        if !start_va.aligned() {
+            return -1;
+        }
+        // check if port is valid
+        if (port & !0x7 != 0) || (port & 0x7 == 0) {
+            return -1;
+        }
+        // map permission
+        let mut map_perm = MapPermission::U;
+        let mut flags = PTEFlags::V | PTEFlags::U;
+        if port & 0b1 != 0 {
+            map_perm |= MapPermission::R;
+            flags |= PTEFlags::R;
+        }
+        if port & 0b10 != 0 {
+            map_perm |= MapPermission::W;
+            flags |= PTEFlags::W;
+        }
+        if port & 0b100 != 0 {
+            map_perm |= MapPermission::X;
+            flags |= PTEFlags::X;
+        }
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+        let mut map_area = MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+        for vpn in vpn_range {
+            if let Some(frame) = frame_alloc() {
+                let ppn = frame.ppn;
+                map_area.data_frames.insert(vpn, frame);
+                if let Some(pte) = self.page_table.find_pte(vpn) {
+                    // ???????
+                    if pte.is_valid() {
+                        return -1;
+                    }
+                }
+                // let flags = PTEFlags::from_bits(map_perm.bits).unwrap() | PTEFlags::V;
+                *self.page_table.find_pte_create(vpn).unwrap() = PageTableEntry::new(ppn, flags);
+            } else {
+                return -1;
+            }
+        }
+        self.areas.push(map_area);
+        0
+    }
+    pub fn checked_unmap(&mut self, start: usize, len: usize) -> isize {
+        let (start_va, end_va) = (VirtAddr::from(start), VirtAddr::from(start + len));
+        // check if start is valid
+        if !start_va.aligned() {
+            return -1;
+        }
+        let vpn_range = VPNRange::new(start_va.floor(), end_va.ceil());
+        for vpn in vpn_range {
+            let mut found = false;
+            // find map area with target vpn
+            for map_area in self.areas.iter_mut() {
+                if map_area.data_frames.remove(&vpn).is_none() {
+                    continue;
+                }
+                found = true;
+                if let Some(pte) = self.page_table.find_pte(vpn) {
+                    if !pte.is_valid() {
+                        return -1;
+                    } else {
+                        self.page_table.unmap(vpn);
+                    }
+                } else {
+                    return -1;
+                }
+            }
+            if !found {
+                return -1;
+            }
+        }
+        0
+    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,

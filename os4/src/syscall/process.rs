@@ -3,9 +3,9 @@
 use crate::config::MAX_SYSCALL_NUM;
 use crate::mm::translated_typed_buffer;
 use crate::task::{
-    current_user_token, exit_current_and_run_next, get_current_task_st_time,
-    get_current_task_status, get_current_task_syscall_times, suspend_current_and_run_next,
-    TaskStatus,
+    current_task_map_range, current_task_unmap_range, current_user_token,
+    exit_current_and_run_next, get_current_task_st_time, get_current_task_status,
+    get_current_task_syscall_times, suspend_current_and_run_next, TaskStatus,
 };
 use crate::timer::get_time_us;
 
@@ -52,12 +52,12 @@ pub fn sys_set_priority(_prio: isize) -> isize {
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    -1
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    current_task_map_range(start, len, port)
 }
 
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    current_task_unmap_range(start, len)
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
